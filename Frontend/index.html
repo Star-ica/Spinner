@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spin the Wheel</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+    }
+
+    .wheel-container {
+      position: relative;
+      margin: 50px auto;
+      width: 80vw;
+      height: 80vw;
+      max-width: 300px;
+      max-height: 300px;
+    }
+
+    .wheel {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 5px solid #333;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    /* Segment styling */
+    .segment {
+      position: absolute;
+      width: 50%;
+      height: 50%;
+      top: 50%;
+      left: 50%;
+      transform-origin: 0% 0%;
+      text-align: center;
+      font-weight: bold;
+      color: rgb(41, 2, 2);
+    }
+
+    /* Segment colors and rotation */
+    .segment:nth-child(1) {
+      background-color: #0f0; /* Green */
+      transform: rotate(0deg) translate(-100%);
+      clip-path: polygon(100% 100%, 0 100%, 100% 0);
+      color:  rgb(1, 10, 1);;
+    }
+
+    .segment:nth-child(2) {
+      background-color: #f0f; /* Pink */
+      transform: rotate(51.43deg) translate(-100%);
+      clip-path: polygon(100% 100%, 0 100%, 100% 0);
+      color:  rgb(1, 10, 1);;
+
+    }
+
+    .segment:nth-child(3) {
+      background-color: #ff0; /* Yellow */
+      transform: rotate(102.86deg) translate(-100%);
+      clip-path: polygon(100% 100%, 0 100%, 100% 0);
+      color: rgb(1, 10, 1);
+    }
+
+    .segment:nth-child(4) {
+      background-color: #0ff; /* Sky */
+      transform: rotate(154.29deg) translate(-100%);
+      clip-path: polygon(100% 100%, 0 100%, 100% 0);
+      color:  rgb(1, 10, 1);
+    }
+
+    .segment:nth-child(5) {
+      background-color: #f00; /* Red */
+      transform: rotate(205.71deg) translate(-100%);
+      clip-path: polygon(100% 100%, 0 100%, 100% 0);
+      color: rgb(1, 10, 1);
+    }
+
+    .segment:nth-child(6) {
+      background-color: #fa0; /* Orange */
+      transform: rotate(257.14deg) translate(-100%);
+      clip-path: polygon(100% 100%, 0 100%, 100% 0);
+      color:  rgb(1, 10, 1);
+    }
+
+    .segment:nth-child(7) {
+      background-color: #00f; /* Blue */
+      transform: rotate(308.57deg) translate(-100%);
+      clip-path: polygon(100% 100%, 0 100%, 100% 0);
+      color: #ffffff;
+    }
+
+    .segment span {
+      display: block;
+      transform: rotate(-25.71deg); /* Adjust for text orientation */
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform-origin: center;
+    }
+
+    .pointer {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border-left: 5vw solid transparent;
+      border-right: 5vw solid transparent;
+      border-top: 2vw solid #333;
+      top: -2vw;
+      left: calc(50% - 5vw);
+      z-index: 2;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    /* Style for User and Owner sections */
+    .action-section {
+      margin-top: 30px;
+    }
+
+    .action-section input {
+      padding: 10px;
+      margin-right: 10px;
+      font-size: 14px;
+    }
+
+    #connectWalletButton {
+      background-color: #28a745;
+    }
+
+    #connectWalletButton:hover {
+      background-color: #218838;
+    }
+
+    .wallet-info {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <h1>Would You Spin the Wheel?</h1>
+  
+  <!-- Connect Wallet Button -->
+  <button onclick="init()">Connect Wallet</button>
+  <div id="walletInfo" class="wallet-info"></div>
+
+  <div class="wheel-container">
+    <div class="pointer"></div>
+    <div class="wheel">
+      <div class="segment"><span>1 Mio €</span></div> <!-- Green -->
+      <div class="segment"><span>10k €</span></div> <!-- Pink -->
+      <div class="segment"><span>500k €</span></div> <!-- Yellow -->
+      <div class="segment"><span>1k €</span></div> <!-- Sky -->
+      <div class="segment"><span>Death</span></div> <!-- Red -->
+      <div class="segment"><span>100k €</span></div> <!-- Orange -->
+      <div class="segment"><span>50k €</span></div> <!-- Blue -->
+    </div>
+  </div>
+  <button id="spinButton">Spin!</button>
+  <p id="result"></p>
+
+  <!-- User Actions -->
+  <div class="action-section">
+    <h3>User Actions</h3>
+    <input type="number" id="fundAmount" placeholder="Amount to fund">
+    <button id="fundButton">Fund</button>
+
+    <input type="number" id="withdrawAmount" placeholder="Amount to withdraw">
+    <button id="withdrawButton">Withdraw</button>
+
+    <input type="number" id="stakeAmount" placeholder="Amount to stake">
+    <button id="stakeButton">Stake</button>
+  </div>
+
+  <!-- Owner Actions (For Owner Only) -->
+  <div class="action-section">
+    <h3>Owner Actions</h3>
+    <input type="number" id="ownerFundAmount" placeholder="Owner Fund Contract">
+    <button id="ownerFundButton">Owner Fund Contract</button>
+
+    <input type="number" id="ownerWithdrawAmount" placeholder="Owner Withdraw Contract">
+    <button id="ownerWithdrawButton">Owner Withdraw</button>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/web3/dist/web3.min.js"></script>
+  <script>
+    let web3;
+    let contract;
+    let currentAccount = null;
+    const contractAddress = 'YOUR_CONTRACT_ADDRESS';
+    const abi = [/* Your Contract ABI here */];
+
+    const spinButton = document.getElementById('spinButton');
+    const resultDisplay = document.getElementById('result');
+    const walletInfo = document.getElementById('walletInfo');
+    const connectWalletButton = document.getElementById('connectWalletButton');
+    const prizes = ["1k €", "500k €", "10k €", "1 Mio €", "50k €", "100k €", "Death"];
+    let currentRotation = 0;
+    let spinning = false;
+
+    document.addEventListener('DOMContentLoaded', () => {
+  const connectWalletButton = document.querySelector('button[onclick="init()"]');
+  const walletInfo = document.getElementById('walletInfo');
+  const spinButton = document.getElementById('spinButton');
+  const wheel = document.querySelector('.wheel');
+
+  // Add your event listeners here
+  connectWalletButton.addEventListener('click', init);
+});
+
+   // Initialize Web3 and Connect Wallet
+async function init() {
+  if (window.ethereum) {
+    web3 = new Web3(window.ethereum);
+    try {
+      // Request account access
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      
+      if (accounts.length > 0) {
+        currentAccount = accounts[0];
+
+        // Update the wallet info
+        connectWalletButton.textContent = `Connected: ${shortenAddress(currentAccount)}`;
+        walletInfo.innerHTML = `<span>Wallet Address:</span> ${currentAccount}`;
+      } else {
+        alert('No accounts found. Please connect your wallet.');
+      }
+    } catch (error) {
+      console.error('Error connecting to wallet:', error);
+      alert('Could not connect to wallet. Please try again.');
+    }
+  } else {
+    alert('MetaMask is not installed. Please install it to connect your wallet.');
+  }
+}
+
+// Helper function to shorten the wallet address
+function shortenAddress(address) {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+
+
+
+
+    // User Fund
+    document.getElementById('fundButton').addEventListener('click', async () => {
+      const amount = document.getElementById('fundAmount').value;
+      if (!amount) return alert('Please enter an amount');
+      await contract.methods.fund(web3.utils.toWei(amount, 'ether')).send({ from: currentAccount });
+    });
+
+    // User Withdraw
+    document.getElementById('withdrawButton').addEventListener('click', async () => {
+      const amount = document.getElementById('withdrawAmount').value;
+      if (!amount) return alert('Please enter an amount');
+      await contract.methods.withdraw(web3.utils.toWei(amount, 'ether')).send({ from: currentAccount });
+    });
+
+    // User Stake
+    document.getElementById('stakeButton').addEventListener('click', async () => {
+      const amount = document.getElementById('stakeAmount').value;
+      if (!amount) return alert('Please enter an amount');
+      await contract.methods.stake(web3.utils.toWei(amount, 'ether')).send({ from: currentAccount });
+    });
+
+    // Owner Fund Contract
+    document.getElementById('ownerFundButton').addEventListener('click', async () => {
+      const amount = document.getElementById('ownerFundAmount').value;
+      if (!amount) return alert('Please enter an amount');
+      await contract.methods.addFundsToContract(web3.utils.toWei(amount, 'ether')).send({ from: currentAccount });
+    });
+
+    // Owner Withdraw Contract
+    document.getElementById('ownerWithdrawButton').addEventListener('click', async () => {
+      const amount = document.getElementById('ownerWithdrawAmount').value;
+      if (!amount) return alert('Please enter an amount');
+      await contract.methods.withdrawFromContract(web3.utils.toWei(amount, 'ether')).send({ from: currentAccount });
+    });
+
+    // Spin the Wheel
+    spinButton.addEventListener('click', () => {
+      if (spinning) return;
+      spinning = true;
+      const randomDegree = Math.floor(Math.random() * 360);
+      const spins = 5;
+      const totalRotation = randomDegree + spins * 360;
+      currentRotation += totalRotation;
+
+      spinButton.disabled = true;
+      wheel.style.transition = "transform 3s ease-out";
+      wheel.style.transform = `rotate(${currentRotation}deg)`;
+
+      setTimeout(() => {
+        const finalDegree = currentRotation % 360;
+        const index = Math.floor((finalDegree + 25.71) / 51.43) % 7;
+        resultDisplay.textContent = `Result: ${prizes[index]}`;
+        spinButton.disabled = false;
+        spinning = false;
+      }, 3000);
+    });
+  </script>
+</body>
+</html>
