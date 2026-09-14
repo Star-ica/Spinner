@@ -321,11 +321,6 @@
   .field-row button:hover{ background:var(--brass); }
   .field-row button:disabled{ opacity:0.45; cursor:not-allowed; }
 
-  .owner-toggle{
-    display:block;
-    margin:26px auto 0;
-    text-align:center;
-  }
   #ownerPanel{ display:none; margin-top:18px; }
   #ownerPanel.open{ display:block; }
   .owner-badge{
@@ -419,8 +414,8 @@
   </div>
 
   <div class="lever-wrap">
-    <button id="spinButton">Pull the Lever</button>
-    <p id="result">Place your stake, then spin.</p>
+    <button id="spinButton" disabled>Pull the Lever</button>
+    <p id="result">Stake to unlock the lever.</p>
   </div>
 
   <div class="ticker-wrap">
@@ -428,14 +423,10 @@
   </div>
 
   <div class="panels">
-    <div class="panel">
-      <h3>Your Balance</h3>
-      <p class="sub">Fund, stake or withdraw from your on-chain balance</p>
+    <div class="panel" id="playerPanel">
+      <h3>Play &amp; Cash Out</h3>
+      <p class="sub" id="balanceDisplay">Connect a wallet to see your balance</p>
 
-      <div class="field-row">
-        <input type="number" id="fundAmount" placeholder="Amount to fund">
-        <button id="fundButton">Fund</button>
-      </div>
       <div class="field-row">
         <input type="number" id="stakeAmount" placeholder="Amount to stake">
         <button id="stakeButton">Stake</button>
@@ -453,14 +444,10 @@
     </div>
   </div>
 
-  <div style="text-align:center;">
-    <button class="ghost-btn owner-toggle" id="ownerToggle">Owner controls</button>
-  </div>
-
   <div class="panel" id="ownerPanel">
     <span class="owner-badge">OWNER ONLY</span>
     <h3>House Treasury</h3>
-    <p class="sub">Fund or draw down the contract's reserve</p>
+    <p class="sub" id="houseBalanceDisplay">Fund or draw down the contract's reserve</p>
     <div class="field-row">
       <input type="number" id="ownerFundAmount" placeholder="Amount to add">
       <button id="ownerFundButton">Fund House</button>
@@ -481,8 +468,38 @@
   let web3;
   let contract;
   let currentAccount = null;
-  const contractAddress = 'YOUR_CONTRACT_ADDRESS';
-  const abi = [/* Your Contract ABI here */];
+  const contractAddress = '0x9a1d6Be2Fb14c5f16d3D8216239Fc44c30293349';
+  const abi = [{"inputs":[{"internalType":"address","name":"_token","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ContractFunded","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ContractWithdrawal","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Funded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"reward","type":"uint256"},{"indexed":false,"internalType":"string","name":"result","type":"string"}],"name":"RewardCalculated","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Staked","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"fee","type":"uint256"}],"name":"Withdraw","type":"event"},{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"addFundsToContract","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"balances","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"contractBalance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"fund","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"stakedAmount","type":"uint256"},{"internalType":"string","name":"result","type":"string"}],"name":"processSpinResult","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"token","outputs":[{"internalType":"contract IERC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"withdrawFromContract","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"withdrawalFeePercent","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}];
+
+  // Minimal ERC20 surface needed to talk to whatever token the contract
+  // points at (USDT has 6 decimals, not the 18 that "ether" units assume,
+  // and transferFrom() needs an approve() first — both handled below).
+  const erc20Abi = [
+    { "constant": true, "inputs": [], "name": "decimals", "outputs": [{ "name": "", "type": "uint8" }], "stateMutability": "view", "type": "function" },
+    { "constant": true, "inputs": [{ "name": "owner", "type": "address" }, { "name": "spender", "type": "address" }], "name": "allowance", "outputs": [{ "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" },
+    { "constant": false, "inputs": [{ "name": "spender", "type": "address" }, { "name": "value", "type": "uint256" }], "name": "approve", "outputs": [{ "name": "", "type": "bool" }], "stateMutability": "nonpayable", "type": "function" },
+    { "constant": true, "inputs": [], "name": "symbol", "outputs": [{ "name": "", "type": "string" }], "stateMutability": "view", "type": "function" }
+  ];
+  let tokenContract = null;
+  let tokenDecimals = 18;
+  let tokenSymbol = '';
+
+  // Decimal-safe conversion helpers — replace web3.utils.toWei/fromWei,
+  // which hardcode 18 decimals and would be wrong for a 6-decimal token like USDT.
+  function parseUnits(amountStr, decimals){
+    const clean = String(amountStr).trim();
+    const [wholeRaw, fracRaw = ''] = clean.split('.');
+    const whole = wholeRaw === '' ? '0' : wholeRaw;
+    const frac = (fracRaw + '0'.repeat(decimals)).slice(0, decimals);
+    return (BigInt(whole) * (10n ** BigInt(decimals)) + BigInt(frac || '0')).toString();
+  }
+  function formatUnits(rawStr, decimals){
+    const raw = BigInt(rawStr);
+    const base = 10n ** BigInt(decimals);
+    const whole = raw / base;
+    const frac = (raw % base).toString().padStart(decimals, '0').replace(/0+$/, '');
+    return frac ? `${whole}.${frac}` : whole.toString();
+  }
 
   // Segments map 1:1 to SpinReward.processSpinResult()'s result codes,
   // so what the wheel lands on is exactly what the contract pays out.
@@ -506,6 +523,10 @@
 
   let currentRotation = 0;
   let spinning = false;
+  let stakedAmount = 0; // ether amount currently staked and awaiting a spin
+
+  const playerPanel = document.getElementById('playerPanel');
+  const ownerPanel = document.getElementById('ownerPanel');
 
   // ---------------------------------------------------------------
   // Build the wheel as an SVG pie so segment math is exact
@@ -584,6 +605,13 @@
           connectWalletButton.textContent = shortenAddress(currentAccount);
           walletInfo.textContent = `Connected: ${shortenAddress(currentAccount)}`;
           walletDot.classList.add('live');
+
+          if (contractAddress && abi.length) {
+            contract = new web3.eth.Contract(abi, contractAddress);
+          }
+          await setupToken();
+          await checkOwner();
+          await refreshBalance();
         } else {
           alert('No accounts found. Please connect your wallet.');
         }
@@ -600,48 +628,196 @@
   }
   connectWalletButton.addEventListener('click', init);
 
+  // Reads which ERC20 the deployed contract actually points at (via its
+  // own token() getter) and asks THAT token for its real decimals —
+  // instead of assuming 18, which breaks amounts for tokens like USDT (6).
+  async function setupToken(){
+    if (!contract) return;
+    try {
+      const tokenAddress = await contract.methods.token().call();
+      tokenContract = new web3.eth.Contract(erc20Abi, tokenAddress);
+      const [d, s] = await Promise.all([
+        tokenContract.methods.decimals().call(),
+        tokenContract.methods.symbol().call().catch(() => '')
+      ]);
+      tokenDecimals = Number(d);
+      tokenSymbol = s || '';
+    } catch (error) {
+      console.error('Could not load token info, defaulting to 18 decimals:', error);
+      tokenContract = null;
+      tokenDecimals = 18;
+      tokenSymbol = '';
+    }
+  }
+
+  // fund() and addFundsToContract() both call token.transferFrom() under
+  // the hood, which needs a prior ERC20 approve() from the player/owner —
+  // this checks the current allowance and only prompts for approval when
+  // it's actually too low, so repeat funders aren't asked every time.
+  async function ensureAllowance(amountRaw){
+    if (!tokenContract || !currentAccount) return;
+    const current = await tokenContract.methods.allowance(currentAccount, contractAddress).call();
+    if (BigInt(current) < BigInt(amountRaw)) {
+      resultDisplay.textContent = 'Approve token spending in your wallet…';
+      await tokenContract.methods.approve(contractAddress, amountRaw).send({ from: currentAccount });
+    }
+  }
+
+  // Owner controls replace the player panel entirely for the wallet the
+  // contract itself reports as owner() — checked fresh on every connect.
+  // No toggle click needed; it's automatic based on who's connected.
+  async function checkOwner(){
+    ownerPanel.classList.remove('open');
+    playerPanel.style.display = '';
+    if (!contract || !currentAccount) return;
+    try {
+      const owner = await contract.methods.owner().call();
+      if (owner && owner.toLowerCase() === currentAccount.toLowerCase()) {
+        playerPanel.style.display = 'none';
+        ownerPanel.classList.add('open');
+        await refreshHouseBalance();
+      }
+    } catch (error) {
+      console.error('Could not verify owner:', error);
+    }
+  }
+
+  // The contract's own reserve — separate from any individual player's
+  // balance — read via its public contractBalance() getter.
+  const houseBalanceDisplay = document.getElementById('houseBalanceDisplay');
+  async function refreshHouseBalance(){
+    if (!contract) return null;
+    try {
+      const raw = await contract.methods.contractBalance().call();
+      const human = Number(formatUnits(raw, tokenDecimals));
+      const label = tokenSymbol ? `${human} ${tokenSymbol}` : `${human}`;
+      if (houseBalanceDisplay) houseBalanceDisplay.textContent = `Total in contract: ${label}`;
+      return human;
+    } catch (error) {
+      console.error('Could not read house balance:', error);
+      if (houseBalanceDisplay) houseBalanceDisplay.textContent = 'Could not load contract balance.';
+      return null;
+    }
+  }
+
+  // Pulls the player's on-chain balance so the Stake step can be
+  // validated against real funds before the lever unlocks. Returns null
+  // (not 0) on a failed read so callers can tell "genuinely empty" apart
+  // from "couldn't reach the contract" — usually a wrong-network wallet.
+  const balanceDisplay = document.getElementById('balanceDisplay');
+  async function refreshBalance(){
+    if (!contract || !currentAccount) return null;
+    try {
+      const raw = await contract.methods.balances(currentAccount).call();
+      const human = Number(formatUnits(raw, tokenDecimals));
+      const label = tokenSymbol ? `${human} ${tokenSymbol}` : `${human}`;
+      if (balanceDisplay) balanceDisplay.textContent = `Claimable balance: ${label} (withdraw anytime)`;
+      return human;
+    } catch (error) {
+      console.error('Could not read balance:', error);
+      if (balanceDisplay) balanceDisplay.textContent = 'Could not load balance — check you\u2019re on the right network.';
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------
   // Balance actions
   // ---------------------------------------------------------------
-  document.getElementById('fundButton').addEventListener('click', async () => {
-    const amount = document.getElementById('fundAmount').value;
-    if (!amount) return alert('Please enter an amount');
-    await contract.methods.fund(web3.utils.toWei(amount, 'ether')).send({ from: currentAccount });
+  function requireContract(){
+    if (!contract || !currentAccount) {
+      alert('Connect your wallet first.');
+      return false;
+    }
+    return true;
+  }
+
+  // Players only ever see "Stake" — there's no separate Fund button.
+  // If their on-chain balance can't cover the requested stake, this tops
+  // it up automatically first (approve + fund for just the shortfall),
+  // then arms the lever. The actual play-and-settle happens in the single
+  // processSpinResult() call in the spin handler below.
+  document.getElementById('stakeButton').addEventListener('click', async () => {
+    if (!requireContract()) return;
+    const amount = document.getElementById('stakeAmount').value;
+    if (!amount || Number(amount) <= 0) return alert('Please enter an amount');
+
+    const balance = await refreshBalance();
+    if (balance === null) {
+      return alert('Could not read your on-chain balance — make sure your wallet is on the same network the contract is deployed on, then try again.');
+    }
+
+    try {
+      if (Number(amount) > balance) {
+        const shortfall = (Number(amount) - balance).toFixed(tokenDecimals);
+        const raw = parseUnits(shortfall, tokenDecimals);
+        await ensureAllowance(raw);
+        resultDisplay.textContent = 'Funding…';
+        await contract.methods.fund(raw).send({ from: currentAccount });
+      }
+
+      stakedAmount = Number(amount);
+      spinButton.disabled = false;
+      resultDisplay.className = '';
+      resultDisplay.textContent = `Staked ${stakedAmount} — pull the lever!`;
+      await refreshBalance();
+    } catch (error) {
+      console.error('Stake failed:', error);
+      resultDisplay.textContent = 'Stake failed — check your wallet for a rejected transaction.';
+      alert('Staking failed — check the approve/fund prompts in your wallet and try again.');
+    }
   });
 
   document.getElementById('withdrawButton').addEventListener('click', async () => {
+    if (!requireContract()) return;
     const amount = document.getElementById('withdrawAmount').value;
-    if (!amount) return alert('Please enter an amount');
-    await contract.methods.withdraw(web3.utils.toWei(amount, 'ether')).send({ from: currentAccount });
-  });
-
-  document.getElementById('stakeButton').addEventListener('click', async () => {
-    const amount = document.getElementById('stakeAmount').value;
-    if (!amount) return alert('Please enter an amount');
-    await contract.methods.stake(web3.utils.toWei(amount, 'ether')).send({ from: currentAccount });
+    if (!amount || Number(amount) <= 0) return alert('Please enter an amount');
+    try {
+      const raw = parseUnits(amount, tokenDecimals);
+      await contract.methods.withdraw(raw).send({ from: currentAccount });
+      await refreshBalance();
+    } catch (error) {
+      console.error('Withdraw failed:', error);
+      alert('Withdrawal failed — you may not have enough on-chain balance.');
+    }
   });
 
   document.getElementById('ownerFundButton').addEventListener('click', async () => {
+    if (!requireContract()) return;
     const amount = document.getElementById('ownerFundAmount').value;
-    if (!amount) return alert('Please enter an amount');
-    await contract.methods.addFundsToContract(web3.utils.toWei(amount, 'ether')).send({ from: currentAccount });
+    if (!amount || Number(amount) <= 0) return alert('Please enter an amount');
+    try {
+      const raw = parseUnits(amount, tokenDecimals);
+      await ensureAllowance(raw);
+      resultDisplay.textContent = 'Funding house…';
+      await contract.methods.addFundsToContract(raw).send({ from: currentAccount });
+      resultDisplay.textContent = 'House funded.';
+      await refreshHouseBalance();
+    } catch (error) {
+      console.error('Owner fund failed:', error);
+      alert('That failed — only the contract owner can fund the house.');
+    }
   });
 
   document.getElementById('ownerWithdrawButton').addEventListener('click', async () => {
+    if (!requireContract()) return;
     const amount = document.getElementById('ownerWithdrawAmount').value;
-    if (!amount) return alert('Please enter an amount');
-    await contract.methods.withdrawFromContract(web3.utils.toWei(amount, 'ether')).send({ from: currentAccount });
-  });
-
-  document.getElementById('ownerToggle').addEventListener('click', () => {
-    document.getElementById('ownerPanel').classList.toggle('open');
+    if (!amount || Number(amount) <= 0) return alert('Please enter an amount');
+    try {
+      const raw = parseUnits(amount, tokenDecimals);
+      await contract.methods.withdrawFromContract(raw).send({ from: currentAccount });
+      await refreshHouseBalance();
+    } catch (error) {
+      console.error('Owner withdraw failed:', error);
+      alert('That failed — only the contract owner can draw the house.');
+    }
   });
 
   // ---------------------------------------------------------------
   // Spin
   // ---------------------------------------------------------------
   spinButton.addEventListener('click', () => {
-    if (spinning) return;
+    if (spinning || stakedAmount <= 0) return;
+    if (!requireContract()) return;
     spinning = true;
     spinButton.disabled = true;
     resultDisplay.className = '';
@@ -658,19 +834,36 @@
 
     wheelSvg.style.transform = `rotate(${currentRotation}deg)`;
 
-    setTimeout(() => {
+    setTimeout(async () => {
       const seg = segments[targetIndex];
       const win = ['3', '2', 'Draw'].includes(seg.code);
-      resultDisplay.textContent = `${seg.label} — ${seg.sub}`;
-      resultDisplay.className = win ? 'win' : (seg.code === 'Death' ? 'lose' : '');
+      const thisStake = stakedAmount;
 
-      if (win) coinBurst();
+      resultDisplay.textContent = `${seg.label} — confirm in your wallet…`;
 
-      // Wire this straight to the contract once staking UX is finalized:
-      // await contract.methods.processSpinResult(stakedWei, seg.code).send({ from: currentAccount });
+      try {
+        const stakedWei = parseUnits(String(thisStake), tokenDecimals);
+        // Settles on-chain: processSpinResult() only credits the win to the
+        // player's balances[] entry — no tokens move yet. The player claims
+        // it later by calling withdraw(), same as any other balance.
+        await contract.methods.processSpinResult(stakedWei, seg.code).send({ from: currentAccount });
 
-      spinButton.disabled = false;
-      spinning = false;
+        resultDisplay.textContent = win
+          ? `${seg.label} — ${seg.sub}, credited to your balance`
+          : `${seg.label} — ${seg.sub}`;
+        resultDisplay.className = win ? 'win' : (seg.code === 'Death' ? 'lose' : '');
+        if (win) coinBurst();
+        await refreshBalance();
+        stakedAmount = 0;
+        spinButton.disabled = true; // locked again until the next stake
+      } catch (error) {
+        console.error('Spin settlement failed:', error);
+        resultDisplay.textContent = 'Spin failed on-chain — your stake was not touched.';
+        resultDisplay.className = 'lose';
+        spinButton.disabled = false; // let them retry the same stake
+      } finally {
+        spinning = false;
+      }
     }, 4300);
   });
 
