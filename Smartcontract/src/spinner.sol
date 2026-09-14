@@ -8,7 +8,7 @@ interface IERC20 {
 }
 
 contract SpinReward {
-    mapping(address => uint256) public balances; // User balances
+    mapping(address => uint256) public balances; // User balances (claimable)
     uint256 public contractBalance; // Contract's total balance (tracked separately)
     address public owner; // Contract owner
     IERC20 public token; // Token interface
@@ -59,59 +59,57 @@ contract SpinReward {
         emit ContractWithdrawal(amount);
     }
 
-    // Stake a specified amount from the user's balance
-    function stake(uint256 amount) external {
-        require(amount > 0, "Stake amount must be greater than zero.");
-        require(balances[msg.sender] >= amount, "Insufficient balance to stake.");
-
-        balances[msg.sender] -= amount;
-        emit Staked(msg.sender, amount);
-    }
-
-    // Process the spin result and calculate the reward
+    // Process the spin result and calculate the reward.
+    // IMPORTANT: this now only ever moves the internal `balances` ledger.
+    // No tokens leave the contract here — wins are *credited*, not paid.
+    // Players claim by calling withdraw(), same as any other balance.
     function processSpinResult(uint256 stakedAmount, string memory result) external {
         require(balances[msg.sender] >= stakedAmount, "Insufficient balance to process spin.");
-        
+
         balances[msg.sender] -= stakedAmount; // Deduct the staked amount initially
 
-        if (keccak256(abi.encodePacked(result)) == keccak256(abi.encodePacked("Death"))) {
-            // Handle "Death" case: User loses the entire stake
+        bytes32 r = keccak256(abi.encodePacked(result));
+
+        if (r == keccak256(abi.encodePacked("Death"))) {
+            // User loses the entire stake — it becomes house funds.
             contractBalance += stakedAmount;
             emit RewardCalculated(msg.sender, 0, result);
-        } else if (keccak256(abi.encodePacked(result)) == keccak256(abi.encodePacked("2"))) {
+
+        } else if (r == keccak256(abi.encodePacked("2"))) {
             uint256 reward = (stakedAmount * 2) / 100;
-            contractBalance -= reward;
             uint256 total = stakedAmount + reward;
-            balances[msg.sender] += total;
-            require(token.transfer(msg.sender, total), "Token transfer failed.");
+            contractBalance -= reward; // reward is funded out of the house pot
+            balances[msg.sender] += total; // credited, not transferred — claim via withdraw()
             emit RewardCalculated(msg.sender, total, result);
-        } else if (keccak256(abi.encodePacked(result)) == keccak256(abi.encodePacked("3"))) {
+
+        } else if (r == keccak256(abi.encodePacked("3"))) {
             uint256 reward = (stakedAmount * 3) / 100;
-            contractBalance -= reward;
             uint256 total = stakedAmount + reward;
-            balances[msg.sender] += total;
-            require(token.transfer(msg.sender, total), "Token transfer failed.");
+            contractBalance -= reward;
+            balances[msg.sender] += total; // credited, not transferred — claim via withdraw()
             emit RewardCalculated(msg.sender, total, result);
-        } else if (keccak256(abi.encodePacked(result)) == keccak256(abi.encodePacked("-2")) ||
-                   keccak256(abi.encodePacked(result)) == keccak256(abi.encodePacked("-3"))) {
-            // Handle loss cases (-2, -3)
+
+        } else if (r == keccak256(abi.encodePacked("-2")) || r == keccak256(abi.encodePacked("-3"))) {
+            // Loss cases: stake becomes house funds, same as Death.
             contractBalance += stakedAmount;
             emit RewardCalculated(msg.sender, 0, result);
-        } else if (keccak256(abi.encodePacked(result)) == keccak256(abi.encodePacked("Draw"))) {
+
+        } else if (r == keccak256(abi.encodePacked("Draw"))) {
             uint256 halfStake = stakedAmount / 2; // Half of the stake is returned
-            balances[msg.sender] += halfStake;
-            contractBalance += halfStake;
-            require(token.transfer(msg.sender, halfStake), "Token transfer failed.");
+            balances[msg.sender] += halfStake; // credited, not transferred
+            contractBalance += halfStake;       // the other half goes to the house
             emit RewardCalculated(msg.sender, halfStake, result);
+
         } else {
-            // Default case: No reward or penalty
+            // Default case: stake is simply returned to the claimable balance.
             balances[msg.sender] += stakedAmount;
-            require(token.transfer(msg.sender, stakedAmount), "Token transfer failed.");
             emit RewardCalculated(msg.sender, stakedAmount, result);
         }
     }
 
-    // Withdraw funds from the user's balance with a 2% fee
+    // Withdraw funds from the user's balance with a 2% fee.
+    // This is now the ONLY path real tokens take to leave the contract
+    // and reach a player — including their winnings.
     function withdraw(uint256 amount) external {
         require(amount > 0, "Withdrawal amount must be greater than zero.");
         require(balances[msg.sender] >= amount, "Insufficient balance to withdraw.");
