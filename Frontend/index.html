@@ -595,39 +595,111 @@
   // ---------------------------------------------------------------
   // Wallet connect
   // ---------------------------------------------------------------
-  async function init(){
-    if (window.ethereum) {
-      web3 = new Web3(window.ethereum);
-      try {
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        if (accounts.length > 0) {
-          currentAccount = accounts[0];
-          connectWalletButton.textContent = shortenAddress(currentAccount);
-          walletInfo.textContent = `Connected: ${shortenAddress(currentAccount)}`;
-          walletDot.classList.add('live');
+  // ---------------------------------------------------------------
+  // BotChain Mainnet (chain ID 677 = 0x2A5)
+  // Fill the FILL_ME values from BotChain's official docs.
+  // ---------------------------------------------------------------
+  const BOTCHAIN = {
+    chainId: '0x2A5',
+    chainName: 'BotChain Mainnet',
+    nativeCurrency: { name: 'BOT', symbol: 'BOT', decimals: 18 },
+    rpcUrls: ['https://rpc.botchain.ai'],
+    blockExplorerUrls: ['https://scan.botchain.ai']
+  };
 
-          if (contractAddress && abi.length) {
-            contract = new web3.eth.Contract(abi, contractAddress);
-          }
-          await setupToken();
-          await checkOwner();
-          await refreshBalance();
-        } else {
-          alert('No accounts found. Please connect your wallet.');
+  async function ensureBotchain(){
+    const current = await window.ethereum.request({ method: 'eth_chainId' });
+    if (current.toLowerCase() === BOTCHAIN.chainId.toLowerCase()) return true;
+
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: BOTCHAIN.chainId }]
+      });
+      return true;
+    } catch (err) {
+      // 4902 (or -32603 in some wallets) = network not added yet
+      if (err.code === 4902 || err.code === -32603) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [BOTCHAIN]
+          });
+          return true;
+        } catch (addErr) {
+          console.error('Add network failed:', addErr);
+          return false;
         }
-      } catch (error) {
-        console.error('Error connecting to wallet:', error);
-        alert('Could not connect to wallet. Please try again.');
       }
-    } else {
-      alert('MetaMask is not installed. Please install it to connect your wallet.');
+      if (err.code === 4001) console.warn('User rejected the network switch');
+      else console.error('Network switch failed:', err);
+      return false;
     }
   }
+
+  // Reload on network/account change so state never goes stale
+  if (window.ethereum) {
+    window.ethereum.on('chainChanged', () => window.location.reload());
+    window.ethereum.on('accountsChanged', () => window.location.reload());
+  }
+
+  // ---------------------------------------------------------------
+  // Wallet connect
+  // ---------------------------------------------------------------
+  async function init(){
+    if (!window.ethereum) {
+      alert('No wallet detected. Install MetaMask, or open this page in your wallet\u2019s browser (and not inside an embedded preview).');
+      return;
+    }
+
+    connectWalletButton.disabled = true;
+    try {
+      web3 = new Web3(window.ethereum);
+
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (!accounts || accounts.length === 0) {
+        alert('No accounts found. Please connect your wallet.');
+        return;
+      }
+
+      // Force BotChain Mainnet (677) before touching the contract
+      const onBotchain = await ensureBotchain();
+      if (!onBotchain) {
+        walletInfo.textContent = 'Wrong network — switch to BotChain Mainnet (677)';
+        walletDot.classList.remove('live');
+        alert('Please switch to BotChain Mainnet (chain ID 677) to use this app.');
+        return;
+      }
+
+      currentAccount = accounts[0];
+      connectWalletButton.textContent = shortenAddress(currentAccount);
+      walletInfo.textContent = `Connected: ${shortenAddress(currentAccount)} · BotChain`;
+      walletDot.classList.add('live');
+
+      if (contractAddress && abi.length) {
+        contract = new web3.eth.Contract(abi, contractAddress);
+      }
+      await setupToken();
+      await checkOwner();
+      await refreshBalance();
+    } catch (error) {
+      console.error('Error connecting to wallet:', error);
+      if (error && error.code === -32002) {
+        alert('A wallet request is already pending — open your wallet extension and approve it.');
+      } else if (error && error.code === 4001) {
+        alert('Connection request was rejected.');
+      } else {
+        alert('Could not connect to wallet. Please try again.');
+      }
+    } finally {
+      connectWalletButton.disabled = false;
+    }
+  }
+
   function shortenAddress(address){
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   }
   connectWalletButton.addEventListener('click', init);
-
   // Reads which ERC20 the deployed contract actually points at (via its
   // own token() getter) and asks THAT token for its real decimals —
   // instead of assuming 18, which breaks amounts for tokens like USDT (6).
